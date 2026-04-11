@@ -1,14 +1,34 @@
 services:
+
+  ib-gateway:
+    image: ghcr.io/gnzsnz/ib-gateway:stable
+    restart: always
+    environment:
+      TWS_USERID: ${IB_USERNAME}
+      TWS_PASSWORD: ${IB_PASSWORD}
+      TRADING_MODE: live        # or 'paper' for paper trading
+      VNC_SERVER_PASSWORD: ${VNC_PASSWORD:-changeme}
+      TWOFA_TIMEOUT_ACTION: restart   # auto-restart on 2FA timeout
+    ports:
+      - "4002:4002"   # IB Gateway API port
+      - "5900:5900"   # VNC (for manual login if needed)
+    volumes:
+      - ib-gateway-data:/home/ibgateway
+
   ib-viewer:
     build: .
+    restart: always
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/backend/data  # persist SQLite DB
+      - ./data:/app/backend/data
     environment:
-      - IB_HOST=host.docker.internal  # connects to IB Gateway on host machine
+      - IB_HOST=ib-gateway
       - IB_PORT=4002
       - IB_CLIENT_ID=1
       - DB_PATH=/app/backend/data/ib_viewer.db
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # Linux support
+    depends_on:
+      - ib-gateway
+
+volumes:
+  ib-gateway-data:
