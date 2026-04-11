@@ -10,7 +10,7 @@ services:
       VNC_SERVER_PASSWORD: ${VNC_PASSWORD:-changeme}
       TWOFA_TIMEOUT_ACTION: restart   # auto-restart on 2FA timeout
     ports:
-      - "4001:4001"   # IB Gateway API port (live=4001, paper=4002)
+      - "4000:4000"   # IB Gateway API port
       - "5900:5900"   # VNC (for manual login if needed)
     volumes:
       - ib-gateway-data:/home/ibgateway
@@ -24,7 +24,7 @@ services:
       - ./data:/app/backend/data
     environment:
       - IB_HOST=ib-gateway
-      - IB_PORT=4001
+      - IB_PORT=4000
       - IB_CLIENT_ID=1
       - DB_PATH=/app/backend/data/ib_viewer.db
     depends_on:
