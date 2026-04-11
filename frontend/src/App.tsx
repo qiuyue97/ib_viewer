@@ -1,27 +1,14 @@
-import { useEffect, useState } from 'react'
 import { useWebSocket } from './useWebSocket'
-import { listCapital } from './api'
-import type { CapitalInjection } from './types'
 import { StatusBar } from './components/StatusBar'
 import { AccountBalance } from './components/AccountBalance'
 import { ExchangeRate } from './components/ExchangeRate'
 import { Positions } from './components/Positions'
 import { Returns } from './components/Returns'
-import { CapitalManager } from './components/CapitalManager'
 
 const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
 
 export default function App() {
   const { data, status } = useWebSocket(WS_URL)
-  const [injections, setInjections] = useState<CapitalInjection[]>([])
-
-  async function refreshCapital() {
-    try {
-      setInjections(await listCapital())
-    } catch { /* ignore */ }
-  }
-
-  useEffect(() => { refreshCapital() }, [])
 
   const snap = data?.snapshot
   const ret = data?.returns
@@ -53,8 +40,6 @@ export default function App() {
         )}
 
         {ret && <Returns metrics={ret} />}
-
-        <CapitalManager injections={injections} onRefresh={refreshCapital} />
       </div>
     </div>
   )
