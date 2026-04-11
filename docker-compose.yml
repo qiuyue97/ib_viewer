@@ -1,0 +1,14 @@
+services:
+  ib-viewer:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/backend/data  # persist SQLite DB
+    environment:
+      - IB_HOST=host.docker.internal  # connects to IB Gateway on host machine
+      - IB_PORT=4002
+      - IB_CLIENT_ID=1
+      - DB_PATH=/app/backend/data/ib_viewer.db
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Linux support
