@@ -10,21 +10,21 @@ services:
       VNC_SERVER_PASSWORD: ${VNC_PASSWORD:-changeme}
       TWOFA_TIMEOUT_ACTION: restart   # auto-restart on 2FA timeout
     ports:
-      - "4000:4000"   # IB Gateway API port
+      - "4001:4001"   # IB Gateway API port
       - "5900:5900"   # VNC (for manual login if needed)
+      - "8100:8000"   # ib-viewer web UI (shared network)
     volumes:
       - ib-gateway-data:/home/ibgateway
 
   ib-viewer:
     build: .
     restart: always
-    ports:
-      - "8100:8000"
+    network_mode: "service:ib-gateway"   # share ib-gateway network, connect via 127.0.0.1
     volumes:
       - ./data:/app/backend/data
     environment:
-      - IB_HOST=ib-gateway
-      - IB_PORT=4000
+      - IB_HOST=127.0.0.1
+      - IB_PORT=4001
       - IB_CLIENT_ID=1
       - DB_PATH=/app/backend/data/ib_viewer.db
     depends_on:
