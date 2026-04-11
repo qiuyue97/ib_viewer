@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 
 echo Starting IB Viewer backend...
-start "IB Viewer Backend" cmd /k "cd backend && uvicorn main:app --host 0.0.0.0 --port 8000"
+start "IB Viewer Backend" cmd /k "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000"
 
 timeout /t 2 /nobreak >nul
 
