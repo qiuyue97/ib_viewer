@@ -34,8 +34,14 @@ def _get_usdcnh_rate() -> tuple[float, str]:
 def get_snapshot() -> AccountSnapshot:
     _ensure_connected()
 
+    account_id = os.getenv("IB_ACCOUNT_ID", "")
+
     # --- account values ---
-    account_values = {v.tag: v for v in _ib.accountValues() if v.currency == "USD"}
+    account_values = {
+        v.tag: v
+        for v in _ib.accountValues()
+        if v.currency == "USD" and (not account_id or v.account == account_id)
+    }
     cash_usd = float(account_values.get("CashBalance", type("x", (), {"value": "0"})()).value)
 
     # --- exchange rate ---
@@ -43,7 +49,7 @@ def get_snapshot() -> AccountSnapshot:
     cash_cny = cash_usd * usdcnh_rate
 
     # --- positions ---
-    raw_positions = _ib.positions()
+    raw_positions = _ib.positions(account=account_id if account_id else "")
     positions: list[Position] = []
 
     for pos in raw_positions:
