@@ -1,121 +1,61 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { useEffect, useState } from 'react'
+import { useWebSocket } from './useWebSocket'
+import { listCapital } from './api'
+import type { CapitalInjection } from './types'
+import { StatusBar } from './components/StatusBar'
+import { AccountBalance } from './components/AccountBalance'
+import { ExchangeRate } from './components/ExchangeRate'
+import { Positions } from './components/Positions'
+import { Returns } from './components/Returns'
+import { CapitalManager } from './components/CapitalManager'
 
-function App() {
-  const [count, setCount] = useState(0)
+const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
+
+export default function App() {
+  const { data, status } = useWebSocket(WS_URL)
+  const [injections, setInjections] = useState<CapitalInjection[]>([])
+
+  async function refreshCapital() {
+    try {
+      setInjections(await listCapital())
+    } catch { /* ignore */ }
+  }
+
+  useEffect(() => { refreshCapital() }, [])
+
+  const snap = data?.snapshot
+  const ret = data?.returns
+  const connError = data?.error
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="min-h-screen bg-gray-100">
+      <StatusBar status={status} lastUpdate={snap?.rate_timestamp} />
 
-      <div className="ticks"></div>
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
+        <h1 className="text-2xl font-bold text-gray-800">IB 账户总览</h1>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+        {connError && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600 text-sm">
+            {connError}
+          </div>
+        )}
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+        {snap ? (
+          <>
+            <AccountBalance snap={snap} />
+            <ExchangeRate snap={snap} />
+            <Positions positions={snap.positions} />
+          </>
+        ) : (
+          <div className="bg-white rounded-2xl shadow p-8 text-center text-gray-400">
+            {status === 'connecting' ? '正在连接 IB Gateway…' : '等待数据…'}
+          </div>
+        )}
+
+        {ret && <Returns metrics={ret} />}
+
+        <CapitalManager injections={injections} onRefresh={refreshCapital} />
+      </div>
+    </div>
   )
 }
-
-export default App
