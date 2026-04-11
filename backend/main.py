@@ -12,7 +12,7 @@ load_dotenv()
 from database import init_db
 from routers import account, capital, ws
 
-FRONTEND_DIST = pathlib.Path(__file__).parent.parent / "frontend" / "dist"
+FRONTEND_DIST = pathlib.Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
