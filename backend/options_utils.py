@@ -89,5 +89,5 @@ def calculate_market_value_with_multiplier(position: float, price: float, contra
     Returns:
         正确的期权市值（已应用乘数）
     """
-    # 将在下一个任务中实现
-    pass
+    multiplier = get_option_multiplier(contract)
+    return position * price * multiplier

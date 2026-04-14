@@ -79,11 +79,28 @@ class TestCalculateMarketValueWithMultiplier:
     """测试期权市值计算"""
 
     def test_calculate_positive_position(self):
-        """测试正数持仓（买入）"""
-        # 将在后续任务中实现
-        pass
+        """测试正数持仓（买入期权）"""
+        contract = Mock()
+        contract.multiplier = "100"
+
+        # 买入1张期权，价格$1.50
+        result = calculate_market_value_with_multiplier(1.0, 1.50, contract)
+        assert result == 150.0  # 1 * 1.50 * 100
 
     def test_calculate_negative_position(self):
-        """测试负数持仓（做空）"""
-        # 将在后续任务中实现
-        pass
+        """测试负数持仓（卖出期权）"""
+        contract = Mock()
+        contract.multiplier = "100"
+
+        # 卖出1张期权，价格$2.00
+        result = calculate_market_value_with_multiplier(-1.0, 2.00, contract)
+        assert result == -200.0  # -1 * 2.00 * 100
+
+    def test_calculate_default_multiplier(self):
+        """测试使用默认乘数计算"""
+        contract = Mock()
+        # 没有 multiplier 属性
+        del contract.multiplier
+
+        result = calculate_market_value_with_multiplier(1.0, 1.00, contract)
+        assert result == 100.0  # 1 * 1.00 * 100 (默认)
