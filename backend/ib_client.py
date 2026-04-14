@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from ib_insync import IB, Forex, util
 from models import AccountSnapshot, Position
+from options_utils import format_option_symbol, calculate_market_value_with_multiplier
 
 util.startLoop()
 
@@ -137,14 +138,28 @@ def get_snapshot() -> AccountSnapshot:
         if contract in _ib.tickers():
             _ib.cancelMktData(contract)
 
-        market_value = pos.position * market_price
+        # 根据合约类型选择符号格式
+        if contract.secType == "OPT":
+            symbol = format_option_symbol(contract)
+        else:
+            symbol = contract.symbol  # 股票等保持原样
+
+        # 根据合约类型计算市值
+        if contract.secType == "OPT":
+            # 期权：应用乘数计算
+            market_value = calculate_market_value_with_multiplier(
+                pos.position, market_price, contract
+            )
+        else:
+            # 股票等：保持原有计算
+            market_value = pos.position * market_price
         if contract.currency == "USD":
             market_value_cny = market_value * usdcnh_rate
         else:
             market_value_cny = market_value
 
         positions.append(Position(
-            symbol=contract.symbol,
+            symbol=symbol,
             sec_type=contract.secType,
             currency=contract.currency,
             quantity=pos.position,
