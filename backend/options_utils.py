@@ -65,8 +65,16 @@ def get_option_multiplier(contract: Contract) -> float:
     Returns:
         乘数值，期权默认 100，其他类型默认 1
     """
-    # 将在下一个任务中实现
-    pass
+    try:
+        multiplier = getattr(contract, 'multiplier', None)
+        if multiplier is not None:
+            return float(multiplier)
+        else:
+            # 期权默认乘数为 100
+            return 100.0
+    except (ValueError, TypeError):
+        # 解析失败，使用期权默认值
+        return 100.0
 
 
 def calculate_market_value_with_multiplier(position: float, price: float, contract: Contract) -> float:

@@ -51,13 +51,28 @@ class TestGetOptionMultiplier:
 
     def test_get_option_multiplier_with_value(self):
         """测试有乘数值的期权"""
-        # 将在后续任务中实现
-        pass
+        contract = Mock()
+        contract.multiplier = "100"
+
+        result = get_option_multiplier(contract)
+        assert result == 100.0
 
     def test_get_option_multiplier_default(self):
         """测试缺失乘数的期权默认值"""
-        # 将在后续任务中实现
-        pass
+        contract = Mock()
+        # 没有 multiplier 属性
+        del contract.multiplier
+
+        result = get_option_multiplier(contract)
+        assert result == 100.0
+
+    def test_get_option_multiplier_invalid(self):
+        """测试无效乘数值的处理"""
+        contract = Mock()
+        contract.multiplier = "invalid"
+
+        result = get_option_multiplier(contract)
+        assert result == 100.0
 
 
 class TestCalculateMarketValueWithMultiplier:
