@@ -16,8 +16,43 @@ def format_option_symbol(contract: Contract) -> str:
         格式化后的期权名称，如 "SPY-580-PUT-20260523"
         如果信息不完整则部分格式化，如 "SPY-PUT"
     """
-    # 将在下一个任务中实现
-    pass
+    parts = []
+
+    # 底层资产符号（必需）
+    if hasattr(contract, 'symbol') and contract.symbol:
+        parts.append(contract.symbol)
+    else:
+        return getattr(contract, 'symbol', "UNKNOWN")  # 兜底
+
+    # 行权价（可选）
+    if hasattr(contract, 'strike') and contract.strike is not None:
+        try:
+            strike = int(contract.strike) if float(contract.strike).is_integer() else float(contract.strike)
+            parts.append(str(strike))
+        except (ValueError, AttributeError):
+            pass  # 跳过，不添加
+
+    # 期权类型（可选）
+    if hasattr(contract, 'right') and contract.right:
+        right_name = "CALL" if contract.right.upper() == "C" else "PUT"
+        parts.append(right_name)
+
+    # 到期日期（可选）
+    if hasattr(contract, 'lastTradeDateOrContractMonth') and contract.lastTradeDateOrContractMonth:
+        try:
+            # 确保是8位YYYYMMDD格式
+            date_str = str(contract.lastTradeDateOrContractMonth)
+            if len(date_str) == 8 and date_str.isdigit():
+                parts.append(date_str)
+            else:
+                # 尝试解析和转换其他格式
+                if len(date_str) == 6:  # YYMMDD格式
+                    year = "20" + date_str[:2]
+                    parts.append(year + date_str[2:])
+        except (ValueError, AttributeError):
+            pass  # 跳过，不添加
+
+    return "-".join(parts)
 
 
 def get_option_multiplier(contract: Contract) -> float:

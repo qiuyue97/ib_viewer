@@ -13,13 +13,37 @@ class TestFormatOptionSymbol:
 
     def test_format_complete_option_symbol(self):
         """测试完整期权信息格式化"""
-        # 将在后续任务中实现
-        pass
+        contract = Mock()
+        contract.symbol = "SPY"
+        contract.strike = 580.0
+        contract.right = "P"
+        contract.lastTradeDateOrContractMonth = "20260523"
+
+        result = format_option_symbol(contract)
+        assert result == "SPY-580-PUT-20260523"
 
     def test_format_partial_option_symbol(self):
         """测试部分期权信息格式化"""
-        # 将在后续任务中实现
-        pass
+        # 缺少日期的情况
+        contract = Mock()
+        contract.symbol = "AAPL"
+        contract.strike = 150.0
+        contract.right = "C"
+        # 没有 lastTradeDateOrContractMonth
+
+        result = format_option_symbol(contract)
+        assert result == "AAPL-150-CALL"
+
+        # 只有基本信息
+        contract2 = Mock()
+        contract2.symbol = "TSLA"
+        contract2.right = "P"
+        # 明确设置没有 strike 和 lastTradeDateOrContractMonth
+        del contract2.strike
+        del contract2.lastTradeDateOrContractMonth
+
+        result2 = format_option_symbol(contract2)
+        assert result2 == "TSLA-PUT"
 
 
 class TestGetOptionMultiplier:
