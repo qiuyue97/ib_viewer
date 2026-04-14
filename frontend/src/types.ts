@@ -10,8 +10,9 @@ export interface Position {
 }
 
 export interface AccountSnapshot {
-  cash_usd: number
-  cash_cny: number
+  cash_usd: number       // actual USD cash held
+  cash_cnh: number       // actual CNH (offshore CNY) cash held
+  cash_cny: number       // total cash in CNY = cash_cnh + cash_usd * rate
   usdcnh_rate: number
   positions: Position[]
   total_value_cny: number

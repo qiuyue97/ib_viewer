@@ -1,3 +1,4 @@
+import asyncio
 import os
 import pathlib
 from contextlib import asynccontextmanager
@@ -10,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 load_dotenv()
 
 from database import init_db
+from cache import refresh_loop
 from routers import account, capital, ws
 
 FRONTEND_DIST = pathlib.Path(__file__).resolve().parent.parent / "frontend" / "dist"
@@ -18,6 +20,7 @@ FRONTEND_DIST = pathlib.Path(__file__).resolve().parent.parent / "frontend" / "d
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    asyncio.create_task(refresh_loop())
     yield
 
 

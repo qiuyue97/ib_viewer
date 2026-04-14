@@ -27,6 +27,23 @@ services:
       - IB_PORT=4001
       - IB_CLIENT_ID=1
       - DB_PATH=/app/backend/data/ib_viewer.db
+      - IB_ACCOUNT_ID=${IB_ACCOUNT_ID}
+    depends_on:
+      - ib-gateway
+
+  watchdog:
+    image: docker:cli
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: >
+      sh -c "docker events
+        --filter 'container=ib_viewer-ib-gateway-1'
+        --filter 'event=start'
+        | while read _; do
+            echo 'ib-gateway restarted, restarting ib-viewer...';
+            docker restart ib_viewer-ib-viewer-1;
+          done"
     depends_on:
       - ib-gateway
 

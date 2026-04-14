@@ -1,34 +1,23 @@
-import asyncio
-import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from ib_client import get_snapshot
-from database import get_all_injections
-from calculator import compute_returns
+from cache import register, unregister, get_cached
 
 router = APIRouter()
-
-PUSH_INTERVAL = 10  # seconds
 
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
+    register(websocket)
     try:
+        # Send the latest cached snapshot immediately — no waiting for IB
+        cached = get_cached()
+        if cached:
+            await websocket.send_text(cached)
+
+        # Keep the connection alive; the background loop pushes updates
         while True:
-            try:
-                snap = get_snapshot()
-                rows = get_all_injections()
-                injections = [(row.injected_on, row.amount_cny) for row in rows]
-                ret = compute_returns(injections, snap.total_value_cny)
-
-                payload = {
-                    "snapshot": snap.model_dump(),
-                    "returns": ret.model_dump(),
-                }
-                await websocket.send_text(json.dumps(payload, default=str))
-            except Exception as e:
-                await websocket.send_text(json.dumps({"error": str(e)}))
-
-            await asyncio.sleep(PUSH_INTERVAL)
+            await websocket.receive_text()
     except WebSocketDisconnect:
         pass
+    finally:
+        unregister(websocket)

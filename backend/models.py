@@ -14,8 +14,9 @@ class Position(BaseModel):
 
 
 class AccountSnapshot(BaseModel):
-    cash_usd: float
-    cash_cny: float
+    cash_usd: float        # actual USD cash held
+    cash_cnh: float        # actual CNH (offshore CNY) cash held
+    cash_cny: float        # total cash in CNY = cash_cnh + cash_usd * rate
     usdcnh_rate: float
     positions: list[Position]
     total_value_cny: float

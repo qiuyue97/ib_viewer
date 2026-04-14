@@ -1,12 +1,30 @@
+import math
 import os
 from datetime import datetime, timezone
 
 from ib_insync import IB, Forex, util
 from models import AccountSnapshot, Position
 
-util.startLoop()  # allows ib_insync to work inside asyncio event loop
+util.startLoop()
 
 _ib = IB()
+_usdcnh_contract: Forex | None = None  # cached after first qualifyContracts
+
+
+def _first_valid_price(*values) -> float | None:
+    """Return first strictly-positive, non-NaN value, or None if all invalid.
+
+    Intended for market prices only. IB uses -1 to signal "unavailable" and
+    0 as a default placeholder — both are rejected here.
+    """
+    for v in values:
+        try:
+            f = float(v)
+            if not math.isnan(f) and f > 0.0:
+                return f
+        except (TypeError, ValueError):
+            pass
+    return None
 
 
 def _ensure_connected():
@@ -17,18 +35,71 @@ def _ensure_connected():
             clientId=int(os.getenv("IB_CLIENT_ID", "1")),
             readonly=True,
         )
+        # Type 4 = delayed frozen (free). During market hours: ~15-20 min delayed.
+        # After market close / weekends: returns last known ("frozen") price.
+        # Confirmed from wrapper.py: delayed tick types (68/75) write to the same
+        # ticker.last / ticker.close fields as real-time tick types (4/9).
+        _ib.reqMarketDataType(4)
 
 
 def _get_usdcnh_rate() -> tuple[float, str]:
     """Returns (rate, iso_timestamp). Rate is CNY per 1 USD."""
-    pair = Forex("USDCNH")
-    _ib.qualifyContracts(pair)
-    ticker = _ib.reqMktData(pair, "", False, False)
-    _ib.sleep(1)  # wait for market data
-    rate = ticker.last or ticker.close or 0.0
-    _ib.cancelMktData(pair)
+    global _usdcnh_contract
+    if _usdcnh_contract is None:
+        _usdcnh_contract = Forex("USDCNH")
+        _ib.qualifyContracts(_usdcnh_contract)
+
+    # Try snapshot tick data first (works during market hours).
+    [ticker] = _ib.reqTickers(_usdcnh_contract)
+    rate = _first_valid_price(
+        (ticker.bid + ticker.ask) / 2 if ticker.bid and ticker.ask else None,
+        ticker.midpoint(),
+        ticker.marketPrice(),
+        ticker.close,
+    )
+
+    if rate is None:
+        # Fallback: historical MIDPOINT data — free for Forex, always has a
+        # close price even on weekends (last known session close).
+        bars = _ib.reqHistoricalData(
+            _usdcnh_contract,
+            endDateTime="",
+            durationStr="2 D",
+            barSizeSetting="1 day",
+            whatToShow="MIDPOINT",
+            useRTH=False,
+            keepUpToDate=False,
+        )
+        if bars:
+            rate = bars[-1].close
+
     ts = datetime.now(timezone.utc).isoformat()
-    return float(rate), ts
+    return rate or 0.0, ts
+
+
+def _get_cash_balances(account_id: str) -> tuple[float, float]:
+    """Return (cash_usd, cash_cnh) from per-currency CashBalance in accountValues.
+
+    accountValues() is populated at connect time via reqAccountUpdatesMulti for
+    each sub-account (confirmed in ib_insync connectAsync source). It provides
+    CashBalance per currency — unlike accountSummary() which only returns the
+    total converted to the base currency (USD).
+    """
+    values = _ib.accountValues(account=account_id)
+    cash_usd = 0.0
+    cash_cnh = 0.0
+    for v in values:
+        if v.tag != "CashBalance":
+            continue
+        try:
+            val = float(v.value)
+        except ValueError:
+            continue
+        if v.currency == "USD":
+            cash_usd = val
+        elif v.currency == "CNH":
+            cash_cnh = val
+    return cash_usd, cash_cnh
 
 
 def get_snapshot() -> AccountSnapshot:
@@ -36,34 +107,41 @@ def get_snapshot() -> AccountSnapshot:
 
     account_id = os.getenv("IB_ACCOUNT_ID", "")
 
-    # --- account values ---
-    account_values = {
-        v.tag: v
-        for v in _ib.accountValues()
-        if v.currency == "USD" and (not account_id or v.account == account_id)
-    }
-    cash_usd = float(account_values.get("CashBalance", type("x", (), {"value": "0"})()).value)
+    # --- per-currency cash balances (supports negative / margin balances) ---
+    cash_usd, cash_cnh = _get_cash_balances(account_id)
 
     # --- exchange rate ---
     usdcnh_rate, ts = _get_usdcnh_rate()
-    cash_cny = cash_usd * usdcnh_rate
+
+    # total cash in CNY: actual CNH held + USD converted (works correctly when
+    # cash_usd is negative, e.g. -100 USD × 7.25 = -725 CNY)
+    cash_cny = cash_cnh + cash_usd * usdcnh_rate
 
     # --- positions ---
     raw_positions = _ib.positions(account=account_id if account_id else "")
-    positions: list[Position] = []
 
-    for pos in raw_positions:
+    # Request market data for all contracts simultaneously, then wait once.
+    contracts = [pos.contract for pos in raw_positions]
+    tickers = _ib.reqTickers(*contracts)
+
+    positions: list[Position] = []
+    for pos, ticker in zip(raw_positions, tickers):
         contract = pos.contract
-        ticker = _ib.reqMktData(contract, "", False, False)
-        _ib.sleep(0.5)
-        market_price = ticker.last or ticker.close or pos.avgCost
-        _ib.cancelMktData(contract)
+        # Use _first_valid_price here: IB marks unavailable prices as -1 or 0,
+        # which are meaningless for positions and must be rejected.
+        market_price = _first_valid_price(
+            (ticker.bid + ticker.ask) / 2 if ticker.bid and ticker.ask else None,
+            ticker.last,
+            ticker.close,
+        ) or pos.avgCost
+        if contract in _ib.tickers():
+            _ib.cancelMktData(contract)
 
         market_value = pos.position * market_price
         if contract.currency == "USD":
             market_value_cny = market_value * usdcnh_rate
         else:
-            market_value_cny = market_value  # already CNY or unknown
+            market_value_cny = market_value
 
         positions.append(Position(
             symbol=contract.symbol,
@@ -80,6 +158,7 @@ def get_snapshot() -> AccountSnapshot:
 
     return AccountSnapshot(
         cash_usd=cash_usd,
+        cash_cnh=cash_cnh,
         cash_cny=cash_cny,
         usdcnh_rate=usdcnh_rate,
         positions=positions,
