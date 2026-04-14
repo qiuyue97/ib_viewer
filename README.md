@@ -40,7 +40,7 @@
 
 1. **克隆项目**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/qiuyue97/ib_viewer.git
    cd ib_viewer
    ```
 
