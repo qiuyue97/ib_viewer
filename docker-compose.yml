@@ -8,6 +8,13 @@ services:
       TWS_PASSWORD: ${IB_PASSWORD}
       TRADING_MODE: live        # or 'paper' for paper trading
       VNC_SERVER_PASSWORD: ${VNC_PASSWORD:-changeme}
+
+      AUTO_RESTART_TIME: "11:59 PM"
+      TIME_ZONE: Asia/Shanghai
+      RELOGIN_AFTER_TWOFA_TIMEOUT: "yes"
+      BYPASS_WARNING: "yes"
+      SAVE_TWS_SETTINGS: "1 00:00"
+
       TWOFA_TIMEOUT_ACTION: restart   # auto-restart on 2FA timeout
     ports:
       - "4001:4001"   # IB Gateway API port
