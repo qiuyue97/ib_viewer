@@ -16,7 +16,9 @@ class _IBErrorFilter(logging.Filter):
         msg = record.getMessage()
         return not any(f'Error {code},' in msg for code in _SUPPRESSED_IB_CODES)
 
-logging.getLogger('ib_insync').addFilter(_IBErrorFilter())
+_ib_filter = _IBErrorFilter()
+for _n in ('ib_insync', 'ib_insync.wrapper', 'ib_insync.ib', 'ib_insync.client'):
+    logging.getLogger(_n).addFilter(_ib_filter)
 
 _ib = IB()
 _usdcnh_contract: Forex | None = None  # cached after first qualifyContracts
