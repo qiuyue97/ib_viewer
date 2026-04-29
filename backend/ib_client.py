@@ -1,12 +1,22 @@
+import logging
 import math
 import os
 from datetime import datetime, timezone
 
 from ib_insync import IB, Forex, util
 from models import AccountSnapshot, Position
-from options_utils import format_option_symbol, calculate_market_value_with_multiplier
+from options_utils import format_option_symbol, calculate_market_value_with_multiplier, get_option_multiplier
 
 util.startLoop()
+
+_SUPPRESSED_IB_CODES = frozenset({354, 10091})
+
+class _IBErrorFilter(logging.Filter):
+    def filter(self, record):
+        msg = record.getMessage()
+        return not any(f'Error {code},' in msg for code in _SUPPRESSED_IB_CODES)
+
+logging.getLogger('ib_insync').addFilter(_IBErrorFilter())
 
 _ib = IB()
 _usdcnh_contract: Forex | None = None  # cached after first qualifyContracts
@@ -122,7 +132,11 @@ def get_snapshot() -> AccountSnapshot:
     raw_positions = _ib.positions(account=account_id if account_id else "")
 
     # Request market data for all contracts simultaneously, then wait once.
+    # Positions from IB often lack exchange; SMART covers all US-listed contracts.
     contracts = [pos.contract for pos in raw_positions]
+    for c in contracts:
+        if not c.exchange:
+            c.exchange = "SMART"
     tickers = _ib.reqTickers(*contracts)
 
     positions: list[Position] = []
@@ -134,7 +148,14 @@ def get_snapshot() -> AccountSnapshot:
             (ticker.bid + ticker.ask) / 2 if ticker.bid and ticker.ask else None,
             ticker.last,
             ticker.close,
-        ) or pos.avgCost
+        )
+        if market_price is None:
+            # avgCost for options is per-contract (already ×multiplier); divide back
+            # to per-share so it stays consistent with ticker prices.
+            if contract.secType == "OPT":
+                market_price = pos.avgCost / get_option_multiplier(contract)
+            else:
+                market_price = pos.avgCost
         if contract in _ib.tickers():
             _ib.cancelMktData(contract)
 
@@ -146,12 +167,10 @@ def get_snapshot() -> AccountSnapshot:
 
         # 根据合约类型计算市值
         if contract.secType == "OPT":
-            # 期权：应用乘数计算
             market_value = calculate_market_value_with_multiplier(
                 pos.position, market_price, contract
             )
         else:
-            # 股票等：保持原有计算
             market_value = pos.position * market_price
         if contract.currency == "USD":
             market_value_cny = market_value * usdcnh_rate
