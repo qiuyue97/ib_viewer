@@ -8,6 +8,13 @@ services:
       TWS_PASSWORD: ${IB_PASSWORD}
       TRADING_MODE: live        # or 'paper' for paper trading
       VNC_SERVER_PASSWORD: ${VNC_PASSWORD:-changeme}
+
+      AUTO_RESTART_TIME: "11:59 PM"
+      TIME_ZONE: Asia/Shanghai
+      RELOGIN_AFTER_TWOFA_TIMEOUT: "yes"
+      BYPASS_WARNING: "yes"
+      SAVE_TWS_SETTINGS: "1 00:00"
+
       TWOFA_TIMEOUT_ACTION: restart   # auto-restart on 2FA timeout
     ports:
       - "4001:4001"   # IB Gateway API port
@@ -36,14 +43,7 @@ services:
     restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: >
-      sh -c "docker events
-        --filter 'container=ib_viewer-ib-gateway-1'
-        --filter 'event=start'
-        | while read _; do
-            echo 'ib-gateway restarted, restarting ib-viewer...';
-            docker restart ib_viewer-ib-viewer-1;
-          done"
+    command: sh -c "docker events --filter 'container=ib_viewer-ib-gateway-1' --filter 'event=start' | while read line; do echo \"[\$(date)] ib-gateway restarted, restarting ib-viewer...\"; docker restart ib_viewer-ib-viewer-1; echo \"[\$(date)] ib-viewer restart completed\"; sleep 5; done"
     depends_on:
       - ib-gateway
 
