@@ -9,6 +9,8 @@ from options_utils import format_option_symbol, calculate_market_value_with_mult
 
 util.startLoop()
 
+logger = logging.getLogger(__name__)
+
 _SUPPRESSED_IB_CODES = frozenset({354, 10091})
 
 class _IBErrorFilter(logging.Filter):
@@ -21,7 +23,21 @@ for _n in ('ib_insync', 'ib_insync.wrapper', 'ib_insync.ib', 'ib_insync.client')
     logging.getLogger(_n).addFilter(_ib_filter)
 
 _ib = IB()
-_usdcnh_contract: Forex | None = None  # cached after first qualifyContracts
+_usdcnh_contract: Forex | None = None
+
+
+def _on_ib_error(reqId: int, errorCode: int, errorString: str, contract) -> None:
+    if errorCode == 1100:
+        logger.warning("IB connectivity lost (1100) — disconnecting to force clean reconnect")
+        _ib.disconnect()
+    elif errorCode == 1102:
+        # "data maintained" means subscriptions survived, but ib_insync's internal
+        # pending-request queue may be stale; disconnect to reset it cleanly.
+        logger.warning("IB connectivity restored (1102) — reconnecting to reset client state")
+        _ib.disconnect()
+
+
+_ib.errorEvent += _on_ib_error
 
 
 def _first_valid_price(*values) -> float | None:
