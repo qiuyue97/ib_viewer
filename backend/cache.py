@@ -14,7 +14,8 @@ from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
-REFRESH_INTERVAL = 60  # seconds between IB data refreshes
+REFRESH_INTERVAL = 60   # seconds between IB data refreshes
+SNAPSHOT_TIMEOUT = 90   # seconds before giving up on a single IB round-trip
 
 _payload: Optional[str] = None   # pre-serialised JSON string (None = not ready yet)
 _clients: set[WebSocket] = set()
@@ -65,7 +66,13 @@ async def refresh_loop() -> None:
 
     while True:
         try:
-            snap = get_snapshot()
+            # Run the blocking IB call in a thread so the event loop stays
+            # responsive to error callbacks (1100/1102). The timeout ensures
+            # we never hang permanently if reqTickers() never returns.
+            snap = await asyncio.wait_for(
+                asyncio.to_thread(get_snapshot),
+                timeout=SNAPSHOT_TIMEOUT,
+            )
             rows = get_all_injections()
             injections = [(r.injected_on, r.amount_cny) for r in rows]
             ret = compute_returns(injections, snap.total_value_cny)
@@ -77,6 +84,14 @@ async def refresh_loop() -> None:
             _payload = json.dumps(data, default=str)
             logger.info("Snapshot refreshed (usdcnh=%.4f)", snap.usdcnh_rate)
             await _broadcast(_payload)
+
+        except asyncio.TimeoutError:
+            logger.error("Snapshot timed out after %ds — forcing IB disconnect", SNAPSHOT_TIMEOUT)
+            try:
+                from ib_client import _ib
+                _ib.disconnect()
+            except Exception:
+                pass
 
         except Exception as exc:
             logger.error("Snapshot refresh failed: %s", exc)
