@@ -40,6 +40,23 @@ def _on_ib_error(reqId: int, errorCode: int, errorString: str, contract) -> None
 _ib.errorEvent += _on_ib_error
 
 
+def reset_ib_client() -> None:
+    """Recreate the global IB instance after repeated connection failures.
+
+    Called by the cache refresh loop when consecutive timeouts suggest the
+    existing _ib object's internal state is unrecoverable by disconnect alone.
+    """
+    global _ib, _usdcnh_contract
+    logger.warning("Recreating IB client object after repeated failures")
+    try:
+        _ib.disconnect()
+    except Exception:
+        pass
+    _ib = IB()
+    _ib.errorEvent += _on_ib_error
+    _usdcnh_contract = None
+
+
 def _first_valid_price(*values) -> float | None:
     """Return first strictly-positive, non-NaN value, or None if all invalid.
 
